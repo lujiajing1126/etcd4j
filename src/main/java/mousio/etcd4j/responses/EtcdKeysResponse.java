@@ -72,7 +72,7 @@ public final class EtcdKeysResponse implements EtcdHeaderAwareResponse {
   @Override
   public void loadHeaders(HttpHeaders headers) {
     if(headers != null) {
-      this.etcdClusterId = headers.get("X-Etcd-Cluster-Id");
+      this.etcdClusterId = headers.getAndConvert("X-Etcd-Cluster-Id");
       this.etcdIndex = getHeaderPropertyAsLong(headers, "X-Etcd-Index");
       this.raftIndex = getHeaderPropertyAsLong(headers, "X-Raft-Index");
       this.raftTerm = getHeaderPropertyAsLong(headers, "X-Raft-Term");

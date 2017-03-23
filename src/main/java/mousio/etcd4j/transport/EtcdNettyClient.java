@@ -29,7 +29,7 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.ReadTimeoutHandler;
-import io.netty.resolver.dns.DnsAddressResolverGroup;
+import io.netty.resolver.dns.DnsNameResolverGroup;
 import io.netty.resolver.dns.DnsServerAddresses;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.Future;
@@ -138,7 +138,7 @@ public class EtcdNettyClient implements EtcdClientImpl {
       .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
       .option(ChannelOption.TCP_NODELAY, true)
       .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectTimeout())
-      .resolver(new DnsAddressResolverGroup(
+      .resolver(new DnsNameResolverGroup(
         NioDatagramChannel.class,
         DnsServerAddresses.defaultAddresses()))
       .handler(new ChannelInitializer<SocketChannel>() {

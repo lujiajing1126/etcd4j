@@ -36,7 +36,7 @@ public class EtcdNettyClientTest {
       Bootstrap bootstrap = client.getBootstrap();
       Channel channel = bootstrap.connect(ETCD_URI.getHost(), ETCD_URI.getPort()).sync().channel();
 
-      assertEquals(evl, bootstrap.config().group());
+      assertEquals(evl, bootstrap.group());
       assertEquals(100, channel.config().getOption(ChannelOption.CONNECT_TIMEOUT_MILLIS).intValue());
     } catch (Throwable t) {
       LOGGER.warn("", t);

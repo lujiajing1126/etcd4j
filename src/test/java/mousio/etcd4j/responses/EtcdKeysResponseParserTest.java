@@ -21,9 +21,9 @@ public class EtcdKeysResponseParserTest {
   public void setup() {
     this.headers = new DefaultHttpHeaders();
     this.headers.add(X_ETCD_CLUSTER_ID, "test");
-    this.headers.add(X_ETCD_INDEX, 208);
-    this.headers.add(X_RAFT_INDEX, 5);
-    this.headers.add(X_RAFT_TERM, 15);
+    this.headers.addInt(X_ETCD_INDEX, 208);
+    this.headers.addInt(X_RAFT_INDEX, 5);
+    this.headers.addInt(X_RAFT_TERM, 15);
   }
 
   @Test

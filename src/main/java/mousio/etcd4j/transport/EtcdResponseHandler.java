@@ -36,129 +36,128 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
+ * @param <R> Response type
  * @author Jurriaan Mous
  * @author Luca Burgazzoli
- *
- * Handles etcd responses
- *
- * @param <R> Response type
+ *         <p>
+ *         Handles etcd responses
  */
 class EtcdResponseHandler<R> extends SimpleChannelInboundHandler<FullHttpResponse> {
-  private static final Logger logger = LoggerFactory.getLogger(EtcdResponseHandler.class);
-  private static final Map<HttpResponseStatus, EtcdResponseDecoder<? extends Throwable>> failureDecoders;
+    private static final Logger logger = LoggerFactory.getLogger(EtcdResponseHandler.class);
+    private static final Map<HttpResponseStatus, EtcdResponseDecoder<? extends Throwable>> failureDecoders;
 
-  static {
-    failureDecoders = new HashMap<>();
-    failureDecoders.put(HttpResponseStatus.UNAUTHORIZED, EtcdAuthenticationException.DECODER);
-    failureDecoders.put(HttpResponseStatus.NOT_FOUND, EtcdException.DECODER);
-    failureDecoders.put(HttpResponseStatus.FORBIDDEN, EtcdException.DECODER);
-    failureDecoders.put(HttpResponseStatus.PRECONDITION_FAILED, EtcdException.DECODER);
-    failureDecoders.put(HttpResponseStatus.INTERNAL_SERVER_ERROR, EtcdException.DECODER);
-    failureDecoders.put(HttpResponseStatus.BAD_REQUEST, EtcdException.DECODER);
-  }
-
-  protected final Promise<R> promise;
-  protected final EtcdNettyClient client;
-  protected final EtcdRequest<R> request;
-
-  private boolean isRetried;
-
-  /**
-   * Constructor
-   *
-   * @param etcdNettyClient the client handling connections
-   * @param etcdRequest     request
-   */
-  @SuppressWarnings("unchecked")
-  public EtcdResponseHandler(EtcdNettyClient etcdNettyClient, EtcdRequest<R> etcdRequest) {
-    this.client = etcdNettyClient;
-    this.request = etcdRequest;
-    this.promise = etcdRequest.getPromise().getNettyPromise();
-    this.isRetried = false;
-  }
-
-  /**
-   * Set if the connection is retried.
-   * If true the promise will not fail on un-registering this handler.
-   *
-   * @param retried true if request is being retried.
-   */
-  public void retried(boolean retried) {
-    this.isRetried = retried;
-  }
-
-  @Override
-  public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-    if (!isRetried && !promise.isDone()) {
-      this.request.getPromise().handleRetry(new PrematureDisconnectException());
-    }
-    super.channelUnregistered(ctx);
-  }
-
-  @Override
-  protected void channelRead0(ChannelHandlerContext ctx, FullHttpResponse response) throws Exception {
-    final HttpResponseStatus status =response.status();
-    final HttpHeaders headers = response.headers();
-    final ByteBuf content = response.content();
-
-    if (logger.isDebugEnabled()) {
-      logger.debug("Received {} for {} {}",
-        status.code(), this.request.getMethod().name(), this.request.getUri());
+    static {
+        failureDecoders = new HashMap<>();
+        failureDecoders.put(HttpResponseStatus.UNAUTHORIZED, EtcdAuthenticationException.DECODER);
+        failureDecoders.put(HttpResponseStatus.NOT_FOUND, EtcdException.DECODER);
+        failureDecoders.put(HttpResponseStatus.FORBIDDEN, EtcdException.DECODER);
+        failureDecoders.put(HttpResponseStatus.PRECONDITION_FAILED, EtcdException.DECODER);
+        failureDecoders.put(HttpResponseStatus.INTERNAL_SERVER_ERROR, EtcdException.DECODER);
+        failureDecoders.put(HttpResponseStatus.BAD_REQUEST, EtcdException.DECODER);
     }
 
-    if (status.equals(HttpResponseStatus.MOVED_PERMANENTLY)
-      || status.equals(HttpResponseStatus.TEMPORARY_REDIRECT)) {
-      if (headers.contains(HttpHeaderNames.LOCATION)) {
-        this.request.setUrl(headers.get(HttpHeaderNames.LOCATION));
-        this.client.connect(this.request);
-        // Closing the connection which handled the previous request.
-        ctx.close();
+    protected final Promise<R> promise;
+    protected final EtcdNettyClient client;
+    protected final EtcdRequest<R> request;
+
+    private boolean isRetried;
+
+    /**
+     * Constructor
+     *
+     * @param etcdNettyClient the client handling connections
+     * @param etcdRequest     request
+     */
+    @SuppressWarnings("unchecked")
+    public EtcdResponseHandler(EtcdNettyClient etcdNettyClient, EtcdRequest<R> etcdRequest) {
+        this.client = etcdNettyClient;
+        this.request = etcdRequest;
+        this.promise = etcdRequest.getPromise().getNettyPromise();
+        this.isRetried = false;
+    }
+
+    /**
+     * Set if the connection is retried.
+     * If true the promise will not fail on un-registering this handler.
+     *
+     * @param retried true if request is being retried.
+     */
+    public void retried(boolean retried) {
+        this.isRetried = retried;
+    }
+
+    @Override
+    public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
+        if (!isRetried && !promise.isDone()) {
+            this.request.getPromise().handleRetry(new PrematureDisconnectException());
+        }
+        super.channelUnregistered(ctx);
+    }
+
+    @Override
+    protected void messageReceived(ChannelHandlerContext ctx, FullHttpResponse response) throws Exception {
+        final HttpResponseStatus status = response.status();
+        final HttpHeaders headers = response.headers();
+        final ByteBuf content = response.content();
+
         if (logger.isDebugEnabled()) {
-          logger.debug("redirect for {} to {}",
-            this.request.getHttpRequest().uri() ,
-            headers.get(HttpHeaderNames.LOCATION)
-          );
+            logger.debug("Received {} for {} {}",
+                    status.code(), this.request.getMethod().name(), this.request.getUri());
         }
-      } else {
-        this.promise.setFailure(new Exception("Missing Location header on redirect"));
-      }
-    } else {
-      EtcdResponseDecoder<? extends Throwable> failureDecoder = failureDecoders.get(status);
-      if(failureDecoder != null) {
-        this.promise.setFailure(failureDecoder.decode(headers, content));
-      } else if (!content.isReadable()) {
-        // If connection was accepted maybe response has to be waited for
-        if (!status.equals(HttpResponseStatus.OK)
-          && !status.equals(HttpResponseStatus.ACCEPTED)
-          && !status.equals(HttpResponseStatus.CREATED)) {
-          this.promise.setFailure(new IOException(
-            "Content was not readable. HTTP Status: " + status));
-        }
-      } else {
-        try {
-          this.promise.setSuccess(
-            request.getResponseDecoder().decode(headers, content));
-        } catch (Exception e) {
-          if (e instanceof EtcdException) {
-            this.promise.setFailure(e);
-          } else {
-            try {
-              // Try to be smart, if an exception is thrown, first try to decode
-              // the content and see if it is an EtcdException, i.e. an error code
-              // not included in failureDecoders
-              this.promise.setFailure(EtcdException.DECODER.decode(headers, content));
-            } catch (Exception e1) {
-              // if it fails again, set the original exception as failure
-              this.promise.setFailure(e);
-            }
-          }
-        }
-      }
-    }
-  }
 
-  @Override
-  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception  {
-    this.promise.setFailure(cause);
-  }
+        if (status.equals(HttpResponseStatus.MOVED_PERMANENTLY)
+                || status.equals(HttpResponseStatus.TEMPORARY_REDIRECT)) {
+            if (headers.contains(HttpHeaderNames.LOCATION)) {
+                this.request.setUrl(headers.getAndConvert(HttpHeaderNames.LOCATION));
+                this.client.connect(this.request);
+                // Closing the connection which handled the previous request.
+                ctx.close();
+                if (logger.isDebugEnabled()) {
+                    logger.debug("redirect for {} to {}",
+                            this.request.getHttpRequest().uri(),
+                            headers.get(HttpHeaderNames.LOCATION)
+                    );
+                }
+            } else {
+                this.promise.setFailure(new Exception("Missing Location header on redirect"));
+            }
+        } else {
+            EtcdResponseDecoder<? extends Throwable> failureDecoder = failureDecoders.get(status);
+            if (failureDecoder != null) {
+                this.promise.setFailure(failureDecoder.decode(headers, content));
+            } else if (!content.isReadable()) {
+                // If connection was accepted maybe response has to be waited for
+                if (!status.equals(HttpResponseStatus.OK)
+                        && !status.equals(HttpResponseStatus.ACCEPTED)
+                        && !status.equals(HttpResponseStatus.CREATED)) {
+                    this.promise.setFailure(new IOException(
+                            "Content was not readable. HTTP Status: " + status));
+                }
+            } else {
+                try {
+                    this.promise.setSuccess(
+                            request.getResponseDecoder().decode(headers, content));
+                } catch (Exception e) {
+                    if (e instanceof EtcdException) {
+                        this.promise.setFailure(e);
+                    } else {
+                        try {
+                            // Try to be smart, if an exception is thrown, first try to decode
+                            // the content and see if it is an EtcdException, i.e. an error code
+                            // not included in failureDecoders
+                            this.promise.setFailure(EtcdException.DECODER.decode(headers, content));
+                        } catch (Exception e1) {
+                            // if it fails again, set the original exception as failure
+                            this.promise.setFailure(e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        this.promise.setFailure(cause);
+    }
 }

@@ -30,7 +30,7 @@ public class EtcdUtil {
   private static final Logger LOGGER = LoggerFactory.getLogger(EtcdUtil.class);
 
   public static Long getHeaderPropertyAsLong(HttpHeaders headers, String key) {
-    String headerValue = headers.get(key);
+    String headerValue = headers.getAndConvert(key);
     if (headerValue != null) {
       try {
         return Long.parseLong(headerValue);
