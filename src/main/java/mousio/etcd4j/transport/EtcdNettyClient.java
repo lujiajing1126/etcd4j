@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.channels.ClosedChannelException;
@@ -138,9 +139,9 @@ public class EtcdNettyClient implements EtcdClientImpl {
       .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
       .option(ChannelOption.TCP_NODELAY, true)
       .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectTimeout())
-//      .resolver(new DnsNameResolverGroup(
-//        NioDatagramChannel.class,
-//        DnsServerAddresses.defaultAddresses()))
+      .resolver(new DnsNameResolverGroup(
+        NioDatagramChannel.class,
+        DnsServerAddresses.defaultAddresses()))
       .handler(new ChannelInitializer<SocketChannel>() {
         @Override
         public void initChannel(SocketChannel ch) throws Exception {
@@ -407,7 +408,11 @@ public class EtcdNettyClient implements EtcdClientImpl {
   }
 
   private InetSocketAddress connectAddress(URI uri) {
-    return InetSocketAddress.createUnresolved(uri.getHost(), uri.getPort() == -1 ? DEFAULT_PORT : uri.getPort());
+    if (sun.net.util.IPAddressUtil.isIPv4LiteralAddress(uri.getHost()) || sun.net.util.IPAddressUtil.isIPv6LiteralAddress(uri.getHost())) {
+      return new InetSocketAddress(uri.getHost(),uri.getPort() == -1 ? DEFAULT_PORT : uri.getPort());
+    } else {
+      return InetSocketAddress.createUnresolved(uri.getHost(), uri.getPort() == -1 ? DEFAULT_PORT : uri.getPort());
+    }
   }
 
   private class HttpBasicAuthHandler extends ChannelOutboundHandlerAdapter {
