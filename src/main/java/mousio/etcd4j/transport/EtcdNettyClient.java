@@ -138,9 +138,9 @@ public class EtcdNettyClient implements EtcdClientImpl {
       .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
       .option(ChannelOption.TCP_NODELAY, true)
       .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectTimeout())
-      .resolver(new DnsNameResolverGroup(
-        NioDatagramChannel.class,
-        DnsServerAddresses.defaultAddresses()))
+//      .resolver(new DnsNameResolverGroup(
+//        NioDatagramChannel.class,
+//        DnsServerAddresses.defaultAddresses()))
       .handler(new ChannelInitializer<SocketChannel>() {
         @Override
         public void initChannel(SocketChannel ch) throws Exception {
